@@ -3,6 +3,8 @@ import ChatInput from "./ChatInput";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 
+const BACKEND_URL = "http://127.0.0.1:8000";
+
 const ChatWindow = () => {
   const [messages, setMessages] = useState([
     {
@@ -18,22 +20,45 @@ const ChatWindow = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSend = (text) => {
+  const handleSend = async (text) => {
     const userMessage = { text, sender: "user" };
 
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
-    // Simulated API delay
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: text }),
+      });
+
+      console.log(response)
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
       const botMessage = {
-        text: "Analyzing groundwater data for your selected area...",
+        text: data.reply,
         sender: "bot",
       };
 
       setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      const errorMessage = {
+        text: "Sorry, I couldn't connect to the server. Please try again later.",
+        sender: "bot",
+        isError: true,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (
