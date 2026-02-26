@@ -1,1 +1,5 @@
-hii
+Run Backend
+``` py
+cd backend
+uvicorn main:app --reload
+```
