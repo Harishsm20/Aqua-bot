@@ -22,8 +22,11 @@ const parseMarkdown = (text) => {
       if (/^\d+\.\s/.test(line))
         return `<li class="ml-4 list-decimal">${line.replace(/^\d+\.\s/, "")}</li>`;
 
-      // Bold
-      const withBold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      // Bold and italic → HTML, then strip any leftover * symbols
+      const withBold = line
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")  // **bold**
+        .replace(/\*(.*?)\*/g, "<em>$1</em>")              // *italic*
+        .replace(/\*/g, "");                               // strip any remaining *
 
       return withBold
         ? `<p class="leading-relaxed">${withBold}</p>`
