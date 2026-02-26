@@ -1,0 +1,4 @@
+curl -X 'POST' \
+  'https://indiawris.gov.in/Dataset/Ground Water Level?stateName=Tamil%20nadu&districtName=Coimbatore&agencyName=CGWB&startdate=2026-01-25&enddate=2026-02-25&download=true&page=0&size=1000' \
+  -H 'accept: application/json' \
+  -d ''

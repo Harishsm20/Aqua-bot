@@ -1,122 +1,224 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import requests
-import os
-from google import genai
-from dotenv import load_dotenv
+"""
+AquaBot – Groundwater Chatbot Backend
+FastAPI + RAG + Gemini (google-generativeai)
 
-# Load API key
+Run:
+    uvicorn main:app --reload --port 8000
+"""
+
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from google import genai
+
+from rag import GroundwaterRAG
+
+# ─── Config ──────────────────────────────────────────────────────────────────────
+
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+DATA_DIR = Path(__file__).parent / "data"
 
-client = genai.Client(api_key=os.environ.get("API_KEY"))
+# ─── Global RAG instance ─────────────────────────────────────────────────────────
 
-app = FastAPI()
+rag = GroundwaterRAG()
 
-# GROUNDWATER_KEYWORDS = []
 
-# Request model
-class Query(BaseModel):
-    message: str
-
-# Groundwater keywords
-GROUNDWATER_KEYWORDS = [
-    "groundwater",
-    "water level",
-    "hydrogeology",
-    "water quality",
-    "noc",
-    "extraction",
-    "aquifer",
-    "ground water",
-    "resource assessment",
-    "management",
-    "well",
-    "aquifer",
-    "borehole",
-    "water table",
-    "pump"
-]
-
-# AI Call Function
-def call_ai(prompt: str):
-    # This is the actual call to the Gemini API
-    response = client.models.generate_content(
-        model="gemini-2.5-flash", 
-        contents=prompt
-    )
-    return response.text
-# def call_ai(user_message):
-
-    url = "https://api.openai.com/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "gpt-3.5-turbo",
-        "messages": [
-            {
-                "role": "system",
-                "content": """
-You are Aquabot, an AI assistant specialized in groundwater information.
-
-Only answer questions related to:
-- Water level scenario
-- Hydrogeology
-- Water quality
-- Groundwater resource assessment
-- NOC for groundwater extraction
-- Groundwater management practices
-
-If the question is unrelated, reply:
-'Please ask questions related to groundwater only.'
-"""
-            },
-            {
-                "role": "user",
-                "content": user_message
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load data files on startup."""
+    water_level_file = DATA_DIR / "GWATERLVL (2).json"
+    if water_level_file.exists():
+        rag.load_water_level_data(str(water_level_file))
+        print(f"[startup] Loaded water level data from {water_level_file}")
     else:
-        return "Error connecting to AI service."
+        print("[startup] Water level data file not found – real-time context disabled")
+    yield
 
+
+# ─── App ─────────────────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="AquaBot – Groundwater Information System",
+    version="2.0.0",
+    description="RAG-powered chatbot for groundwater queries (CGWB, India)",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ─── Gemini client ───────────────────────────────────────────────────────────────
+
+gemini_client = genai.Client(api_key=API_KEY) if API_KEY else None
+
+
+def call_llm(prompt: str) -> str:
+    """Call Gemini with the RAG-assembled prompt."""
+    if not gemini_client:
+        return "⚠️ LLM not configured. Set API_KEY in .env file."
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        return f"Error calling LLM: {str(e)}"
+
+
+# ─── Request / Response Models ───────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    district: str | None = None
+    state: str | None = None
+    history: list[ChatMessage] | None = []
+    report_mode: bool = False  # True = generate comprehensive report
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: list[str] = []
+    data_used: bool = False
+
+
+class ReportRequest(BaseModel):
+    area: str          # e.g. "Coimbatore, Tamil Nadu"
+    district: str | None = None
+    include_realtime: bool = True
+
+
+# ─── Routes ──────────────────────────────────────────────────────────────────────
 
 @app.get("/")
-def home():
-    return {"message": "Aquabot Backend Running Successfully"}
+def health():
+    return {
+        "status": "running",
+        "service": "AquaBot Groundwater RAG API v2.0",
+        "knowledge_chunks": len(rag.chunks),
+        "realtime_data": rag._water_level_data is not None,
+    }
 
 
-# @app.post("/chat")
-# def chat(query: Query):
+@app.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    """Main chat endpoint – uses RAG to answer groundwater queries."""
 
-#     user_message = query.message.lower()
+    # Build RAG prompt
+    history = [m.model_dump() for m in (req.history or [])]
+    prompt = rag.build_prompt(
+        user_query=req.message,
+        chat_history=history,
+        district=req.district,
+        report_mode=req.report_mode,
+    )
 
-#     # Keyword restriction
-#     if not any(keyword in user_message for keyword in GROUNDWATER_KEYWORDS):
-#         return {
-#             "reply": "Please ask questions related to groundwater only."
-#         }
+    # Retrieve sources for transparency
+    retrieved = rag.retrieve(req.message, top_k=4)
+    sources = [f"{c['category'].upper()}: {c['title']}" for c in retrieved]
 
-#     ai_reply = call_ai(user_message)
+    # Check if real-time data was injected
+    wl_ctx = rag.get_water_level_context(district=req.district)
+    data_used = bool(wl_ctx)
 
-#     return {"reply": ai_reply}
+    # Call LLM
+    reply = call_llm(prompt)
 
-@app.post("/chat")
-def chat(query: Query):
-    user_message = query.message.lower()
+    return ChatResponse(reply=reply, sources=sources, data_used=data_used)
 
-    # Keyword restriction
-    if not any(keyword in user_message for keyword in GROUNDWATER_KEYWORDS):
-        return {"reply": "Please ask questions related to groundwater only."}
 
-    ai_reply = call_ai(user_message)
-    return {"reply": ai_reply}
+@app.post("/report", response_model=ChatResponse)
+def generate_report(req: ReportRequest):
+    """Generate a comprehensive groundwater report for a specified area."""
+    query = (
+        f"Generate a comprehensive groundwater report for {req.area}. "
+        f"Include all sections: hydrogeological setting, water level scenario, "
+        f"resource assessment, categorization, water quality, management practices, "
+        f"NOC conditions, available reports, training opportunities, and glossary."
+    )
+
+    prompt = rag.build_prompt(
+        user_query=query,
+        district=req.district,
+        report_mode=True,
+    )
+
+    retrieved = rag.retrieve(query, top_k=6)
+    sources = [f"{c['category'].upper()}: {c['title']}" for c in retrieved]
+    wl_ctx = rag.get_water_level_context(district=req.district)
+
+    reply = call_llm(prompt)
+    return ChatResponse(reply=reply, sources=sources, data_used=bool(wl_ctx))
+
+
+@app.get("/water-levels")
+def get_water_levels(district: str | None = None, station: str | None = None):
+    """Return raw water level data for a district/station."""
+    if rag._water_level_data is None:
+        raise HTTPException(status_code=503, detail="Water level data not loaded")
+
+    records = rag._water_level_data
+    if district:
+        records = [r for r in records if district.lower() in r.get("district", "").lower()]
+    if station:
+        records = [r for r in records if r.get("stationCode", "").upper() == station.upper()]
+
+    return {"count": len(records), "data": records[:200]}
+
+
+@app.get("/stations")
+def get_stations(district: str | None = None):
+    """Return unique monitoring stations."""
+    if not rag._water_level_data:
+        return {"stations": []}
+
+    seen = {}
+    for r in rag._water_level_data:
+        code = r.get("stationCode")
+        if code and code not in seen:
+            seen[code] = {
+                "code": code,
+                "name": r.get("stationName"),
+                "district": r.get("district"),
+                "tehsil": r.get("tehsil"),
+                "latitude": r.get("latitude"),
+                "longitude": r.get("longitude"),
+                "wellDepth": r.get("wellDepth"),
+                "status": r.get("stationStatus"),
+            }
+
+    stations = list(seen.values())
+    if district:
+        stations = [s for s in stations if district.lower() in (s.get("district") or "").lower()]
+
+    return {"count": len(stations), "stations": stations}
+
+
+@app.get("/knowledge")
+def list_knowledge(category: str | None = None):
+    """List available knowledge chunks (for admin/debug)."""
+    chunks = rag.chunks
+    if category:
+        chunks = [c for c in chunks if c["category"] == category]
+    return {
+        "total": len(chunks),
+        "categories": list({c["category"] for c in rag.chunks}),
+        "chunks": [{"id": c["id"], "category": c["category"], "title": c["title"]} for c in chunks],
+    }
