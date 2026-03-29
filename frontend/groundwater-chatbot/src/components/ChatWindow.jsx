@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import ChatInput from "./ChatInput";
 import MessageBubble from "./MessageBubble";
-import TypingIndicator from "./TypingIndicator";
+import WaterFlowLoader from "./WaterFlowLoader";
+import DataDisplay from "./DataDisplay";
 import SourceBadge from "./SourceBadge";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -26,15 +27,20 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
   }, [messages, isTyping]);
 
   const handleSend = async (text) => {
-    const userMessage = { id: Date.now(), text, sender: "user", sources: [] };
+    const userMessage = {
+      id: Date.now(),
+      text,
+      sender: "user",
+      sources: [],
+      location: selectedDistrict ? `${selectedDistrict}, ${selectedState}` : "All India",
+    };
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);
 
-    // Maintain chat history for context
     historyRef.current = [
       ...historyRef.current,
       { role: "user", content: text },
-    ].slice(-10); // Keep last 10 turns
+    ].slice(-10);
 
     try {
       const endpoint = reportMode ? `${API_BASE}/report` : `${API_BASE}/chat`;
@@ -42,12 +48,13 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
         ? {
             area: `${selectedDistrict || "the selected area"}, ${selectedState || "India"}`,
             district: selectedDistrict,
+            state: selectedState,
             include_realtime: true,
           }
         : {
             message: text,
-            district: selectedDistrict,
-            state: selectedState,
+            district: selectedDistrict || "",
+            state: selectedState || "",
             history: historyRef.current.slice(0, -1),
             report_mode: false,
           };
@@ -63,10 +70,11 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
 
       const botMessage = {
         id: Date.now() + 1,
-        text: data.reply,
+        text: data.reply || "No response generated",
         sender: "bot",
         sources: data.sources || [],
         dataUsed: data.data_used,
+        structuredData: data.structured_data || data.data,
       };
 
       historyRef.current = [
@@ -80,7 +88,7 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
         ...prev,
         {
           id: Date.now() + 1,
-          text: `⚠️ Error: ${err.message}. Make sure the backend is running on ${API_BASE}`,
+          text: `Error: ${err.message}`,
           sender: "bot",
           sources: [],
         },
@@ -124,6 +132,11 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
         {messages.map((msg) => (
           <div key={msg.id}>
             <MessageBubble message={msg} />
+            {msg.sender === "bot" && msg.structuredData && (
+              <div className="mt-3 ml-2 max-w-2xl">
+                <DataDisplay data={msg.structuredData} />
+              </div>
+            )}
             {msg.sender === "bot" && msg.sources?.length > 0 && (
               <div className="mt-1 ml-2 flex flex-wrap gap-1">
                 {msg.sources.map((s, i) => (
@@ -136,7 +149,7 @@ const ChatWindow = ({ selectedDistrict, selectedState }) => {
             )}
           </div>
         ))}
-        {isTyping && <TypingIndicator />}
+        {isTyping && <WaterFlowLoader />}
         <div ref={bottomRef} />
       </div>
 

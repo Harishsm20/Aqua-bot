@@ -24,9 +24,9 @@ const parseMarkdown = (text) => {
 
       // Bold and italic → HTML, then strip any leftover * symbols
       const withBold = line
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")  // **bold**
-        .replace(/\*(.*?)\*/g, "<em>$1</em>")              // *italic*
-        .replace(/\*/g, "");                               // strip any remaining *
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.*?)\*/g, "<em>$1</em>")
+        .replace(/\*/g, "");
 
       return withBold
         ? `<p class="leading-relaxed">${withBold}</p>`
@@ -53,7 +53,12 @@ const MessageBubble = ({ message }) => {
           }`}
       >
         {isUser ? (
-          <p>{message.text}</p>
+          <div>
+            {message.location && (
+              <p className="text-xs opacity-75 mb-1">📍 {message.location}</p>
+            )}
+            <p>{message.text}</p>
+          </div>
         ) : (
           <div
             className="prose-sm"
