@@ -29,8 +29,8 @@ const Landing = () => {
     },
     {
       icon: "📊",
-      title: "GEC 2015 Resource Assessment",
-      description: "Get accurate groundwater resource assessments following official GEC 2015 methodology. Understand extraction stages, recharge potential, and categorization status.",
+      title: "GEC  Resource Assessment",
+      description: "Get accurate groundwater resource assessments following official GEC  methodology. Understand extraction stages, recharge potential, and categorization status.",
       color: "bg-orange-500",
       stat: "385 Blocks (TN)"
     },
@@ -433,7 +433,7 @@ const Landing = () => {
               <ul className="space-y-2 text-sm">
                 <li>CGWB Publications</li>
                 <li>India-WRIS Portal</li>
-                <li>GEC 2015 Reports</li>
+                <li>GEC Reports</li>
                 <li>State GW Departments</li>
               </ul>
             </div>
@@ -448,7 +448,7 @@ const Landing = () => {
             </div>
           </div>
           <div className="border-t border-slate-700 pt-8 text-center text-sm">
-            <p>Built with RAG technology for groundwater professionals. Data sources: CGWB, India-WRIS, GEC 2015.</p>
+            <p>Built with RAG technology for groundwater professionals. Data sources: CGWB, India-WRIS, GEC .</p>
           </div>
         </div>
       </footer>
