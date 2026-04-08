@@ -10,23 +10,25 @@ const ChatInput = ({ onSend, disabled }) => {
   };
 
   return (
-    <div className="p-4 bg-white border-t border-slate-200 flex items-center gap-3 shadow-lg">
+    <div className="px-4 py-3 bg-white border-t border-slate-100 flex items-center gap-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
       <input
         type="text"
         value={input}
-        placeholder="Ask me about groundwater levels, water quality, NOC requirements..."
+        placeholder="Ask about groundwater levels, quality, NOC requirements..."
         onChange={(e) => setInput(e.target.value)}
         disabled={disabled}
-        className="flex-1 p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-800 placeholder:text-slate-400 disabled:bg-slate-100 disabled:text-slate-500 transition"
+        className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-slate-50 text-slate-800 placeholder:text-slate-400 disabled:bg-slate-100 disabled:text-slate-400 transition-all text-sm"
         onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
       />
 
       <button
         onClick={handleSubmit}
         disabled={disabled || !input.trim()}
-        className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-400 text-white px-6 py-3 rounded-xl transition font-semibold flex items-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none"
+        className="flex items-center justify-center w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
       >
-        <span>✈️</span> Send
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M14 8L2 2l3 6-3 6 12-6z" fill="currentColor"/>
+        </svg>
       </button>
     </div>
   );
