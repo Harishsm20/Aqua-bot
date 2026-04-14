@@ -7,6 +7,7 @@ Run:
 """
 
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -23,6 +24,9 @@ from rag import GroundwaterRAG
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+FALLBACK_MODELS = [model.strip() for model in os.getenv("FALLBACK_MODELS", "").split(",") if model.strip()]
+MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "3"))
+RETRY_DELAY_SECONDS = float(os.getenv("LLM_RETRY_DELAY_SECONDS", "1.0"))
 DATA_DIR = Path(__file__).parent / "data"
 
 # ─── Global RAG instance ─────────────────────────────────────────────────────────
@@ -65,17 +69,34 @@ gemini_client = genai.Client(api_key=API_KEY) if API_KEY else None
 
 
 def call_llm(prompt: str) -> str:
-    """Call Gemini with the RAG-assembled prompt."""
+    """Call Gemini with retries and fallback model support."""
     if not gemini_client:
         return "⚠️ LLM not configured. Set API_KEY in .env file."
-    try:
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
-        return response.text
-    except Exception as e:
-        return f"Error calling LLM: {str(e)}"
+
+    models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
+    last_error = None
+
+    for model in models_to_try:
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = gemini_client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                return response.text
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+                    time.sleep(delay)
+                    continue
+                break
+
+    error_message = str(last_error) if last_error else "unknown error"
+    model_list = ", ".join(models_to_try)
+    return (
+        f"Error calling LLM after {MAX_RETRIES} attempts on {model_list}: {error_message}"
+    )
 
 
 # ─── Request / Response Models ───────────────────────────────────────────────────
